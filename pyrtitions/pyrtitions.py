@@ -2,7 +2,7 @@ import os
 import shlex
 import string
 
-def get_partitions():
+def get_uuids_and_labels():
     partitions = []
     labels = {}
     dbu_dir = "/dev/disk/by-uuid/"
@@ -27,15 +27,31 @@ def get_partitions():
         #[{"uuid":"5OUU1DMUCHUNIQUEW0W", "path":"/dev/sda1"}, {"label":"label1", "uuid":"MANYLETTER5SUCH1ONGWOW", "path":"/dev/sdc1"}]
     return partitions
 
-def get_partitions_and_mounts():
-    partitions = get_partitions()
-    mounted_partitions = {}
+def get_size_from_block_count(block_count_str, size_step=1000, sizes = ["K", "M", "G", "T"], format_spec=":2.2f"):
+    block_count = float(block_count_str)
+    size_counter = 0
+    while block_count >= float(size_step):
+        block_count /= size_step
+        size_counter += 1
+    return ("{"+format_spec+"}{}").format(block_count, sizes[size_counter])
 
-    #Good source of information about mounted partitions is /etc/mtab
-    mtab_path = "/etc/mtab" 
-    f = open(mtab_path, "r")
-    lines = f.readlines()
-    f.close()
+def get_device_sizes():
+    with open("/proc/partitions", "r") as f:
+        lines = f.readlines()
+    info_dict = {}
+    lines = lines[1:] #First line is the header
+    for line in lines:
+        line = line.strip()
+        if line: 
+            major, minor, block_count_str, name = line.split()
+            hr_size = get_size_from_block_count(block_count_str)
+            info_dict[name] = [hr_size, block_count_str, int(major), int(minor)]
+    return info_dict
+            
+def get_mounts(mounts_file="/etc/mtab"):
+    mounted_partitions = {}
+    with open(mounts_file, "r") as f:
+        lines = f.readlines()
     for line in lines:
         line = line.strip()
         if line: 
@@ -52,6 +68,12 @@ def get_partitions_and_mounts():
             if device_path.startswith("/dev"):
                 device_path = os.path.realpath(device_path) #Can be a symlink?
                 mounted_partitions[device_path] = [mountpoint, part_type, mount_opts]
+    return mounted_partitions
+
+def get_partitions():
+    partitions = get_uuids_and_labels()
+    mounted_partitions = get_mounts()
+    partition_sizes = get_device_sizes()
     for entry in partitions:
          if entry["path"] in mounted_partitions:
              mpoint, ptype, opts = mounted_partitions[entry["path"]]
@@ -62,7 +84,13 @@ def get_partitions_and_mounts():
          else:
              entry["mounted"] = False
              entry["mountpoint"] = None
+         basename = os.path.basename(entry["path"])
+         if basename in partition_sizes:
+             entry["size"] = partition_sizes[basename][0]
+         else:
+             entry["size"] = None
     return partitions
+
 
 def generate_mountpoint(part_info, base_dir="/media"):
     """Generates a valid mountpoint path, for example, for automatic mount purposes"""
@@ -102,5 +130,4 @@ def pprint_partitions(partitions):
             print("\t{}:{}".format(key, value))
 
 if __name__ == "__main__":
-    partitions = get_partitions_and_mounts()
-    pprint_partitions(partitions)
+    pprint_partitions(get_partitions())
