@@ -1,0 +1,6 @@
+get_block_devices
+	name to path
+better examples of return dicts
+make python -m possible
+publish to PyPi
+build docs

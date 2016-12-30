@@ -3,6 +3,9 @@ import shlex
 import string
 
 def get_uuids_and_labels():
+    """Returns a list of available partitions. Each partition is a dictionary with "uuid" and "path" keys (optionally, also "label").
+        Example: [{"uuid":"5OUU1DMUCHUNIQUEW0W", "path":"/dev/sda1"}, {"label":"VeryImportantDrive", "uuid":"MANYLETTER5SUCH1ONGWOW", "path":"/dev/sdc1"}]
+    """
     partitions = []
     labels = {}
     dbu_dir = "/dev/disk/by-uuid/"
@@ -23,11 +26,17 @@ def get_uuids_and_labels():
         if path in labels.keys():
             details_dict["label"] = labels[path]
         partitions.append(details_dict)
-        #partitions is now something like 
-        #[{"uuid":"5OUU1DMUCHUNIQUEW0W", "path":"/dev/sda1"}, {"label":"label1", "uuid":"MANYLETTER5SUCH1ONGWOW", "path":"/dev/sdc1"}]
     return partitions
 
 def get_size_from_block_count(block_count_str, size_step=1000, sizes = ["K", "M", "G", "T"], format_spec=":2.2f"):
+    """Transforms block count (as returned by /proc/partitions and similar files) to a human-readable size string, with size multiplier ("K", "M", "G" etc.) appended.
+    
+    Kwargs:
+
+        * ``size_step``: size of each multiplier
+        * ``sizes``: list of multipliers to be used
+        *``format_spec``: value formatting specification for the final string
+    """
     block_count = float(block_count_str)
     size_counter = 0
     while block_count >= float(size_step):
@@ -36,6 +45,9 @@ def get_size_from_block_count(block_count_str, size_step=1000, sizes = ["K", "M"
     return ("{"+format_spec+"}{}").format(block_count, sizes[size_counter])
 
 def get_device_sizes():
+    """ Gets partition sizes for all the partitions/block devices available in /proc/partitions.
+
+    Outputs a dictionary of path_basename:["human-readable-size", "block_count_string", "major_number_integer", "minor_number_integer"] entries."""
     with open("/proc/partitions", "r") as f:
         lines = f.readlines()
     info_dict = {}
@@ -49,6 +61,10 @@ def get_device_sizes():
     return info_dict
             
 def get_mounts(mounts_file="/etc/mtab"):
+    """Gets all the mounted partitions. 
+    Outputs a dictionary of path:["mountpoint", "type", "mount options"] entries.
+
+    ``mounts_file`` allows you to specify another file to read from."""
     mounted_partitions = {}
     with open(mounts_file, "r") as f:
         lines = f.readlines()
@@ -71,6 +87,17 @@ def get_mounts(mounts_file="/etc/mtab"):
     return mounted_partitions
 
 def get_partitions():
+    """Combines ``gets_uuids_and_labels``, ``get_mounts`` and ``get_device_sizes`` into one huge dictionary.
+    
+    Format is the same as for ``get_uuids_and_labels``, but with following keys added:
+
+    * ``mounted``: True if partition is currently mounted, False if not.
+
+        If partition is mounted, following keys are added:
+        * ``part_type``: partition type as given in /etc/mtab
+        * ``mount_opts``: partition mount options as given in /etc/mtab
+    * `` mountpoint``: partition mountpoint (None if not mounted).
+    * `` size``: partition size if detected, else None"""
     partitions = get_uuids_and_labels()
     mounted_partitions = get_mounts()
     partition_sizes = get_device_sizes()
@@ -91,9 +118,8 @@ def get_partitions():
              entry["size"] = None
     return partitions
 
-
 def generate_mountpoint(part_info, base_dir="/media"):
-    """Generates a valid mountpoint path, for example, for automatic mount purposes"""
+    """Takes a partition entry from ``get_partitions`` or ``get_uuids_and_labels`` and returns a valid (not taken by another device) mountpoint path, for example, for automatic mount purposes"""
     #We could use either label (easier and prettier)
     #Or UUID (not pretty yet always available)
     path_from_uuid = os.path.join(base_dir, part_info['uuid'])
@@ -114,6 +140,7 @@ def generate_mountpoint(part_info, base_dir="/media"):
         return path_from_uuid+"_("+str(counter)+")" 
 
 def label_filter(label):
+    """Filters passed partition labels to alphanumeric characters"""
     label_list = list(label)
     ascii_letters = string.ascii_letters+string.digits
     for char in arr_label[:]:
@@ -122,12 +149,70 @@ def label_filter(label):
     return "".join(label_list)
 
 def pprint_partitions(partitions):
+    """Pretty-prints entries from  from ``get_partitions`` or ``get_uuids_and_labels``."""
     for part in partitions:
-        print(part["path"])
+        print("Path: "+part["path"])
         other_keys = [key for key in part.keys() if key!="path"]
         for key in other_keys:
             value = part[key]
             print("\t{}:{}".format(key, value))
 
-if __name__ == "__main__":
+def get_blockdev_major_minor(filter_virtual = True):
+    """Gets all available block devices, as well as their major and minor numbers.
+    Returns a dictionary of path:[major_int, minor_int].
+    
+    When ``filter_virtual`` is set to True, filters out all the virtual devices."""
+    devices = {}
+    blockd_dir = "/dev/block" #Contains symlinks to block devices with "major:minor"-formatted names
+    blockd_links = os.listdir(blockd_dir)
+    for major_minor in blockd_links:
+        major, minor = map(int, major_minor.split(':'))
+        device_path = os.path.realpath(os.path.join(blockd_dir, major_minor)) 
+        devices[device_path] = (major, minor)
+    if filter_virtual:
+        virtual_devices = get_virtual_devices()
+        devices = {k: v for k,v in devices.items() if os.path.basename(k) not in virtual_devices}
+    return devices
+    
+def get_block_devices():
+    """Returns a dictionary of all the major devices available. 
+
+    Entry format is device_path:{"major":major_int, size:human readable size (from ``get_device_sizes``), "blocks":block count, "partitions":[{"name":path, "minor":minor_int, "blocks":block count, "size:human readable size (from ``get_device_sizes``"}, ...]}"""
+    #Guess I'll intentionally forget about whole-disk partitions
+    devices = {}
+    devices_by_major = {}
+    bdevs = get_blockdev_major_minor()
+    device_sizes = get_device_sizes()
+    #First, creating dictionary entries for all the block devices with minor 0 
+    for bdev in bdevs:
+        major, minor = bdevs[bdev]
+        if minor == 0:
+            hr_size, block_count = device_sizes[os.path.basename(bdev)][:2]
+            devices_by_major[major] = {"name":bdev, "size":hr_size, "blocks":block_count, "partitions":[]}
+    #Then, filling in the info dictionaries with devices with higher minor numbers for the corresponding major:0 device
+    for bdev in bdevs:
+        major, minor = bdevs[bdev]
+        if minor != 0:
+            hr_size, block_count = device_sizes[os.path.basename(bdev)][:2]
+            devices_by_major[major]["partitions"].append({"name":bdev, "size":hr_size, "blocks":block_count, "minor":minor})
+    #Then, remaking each dictionary to use name rather than major number as a key.
+    for major in devices_by_major:
+        device = devices_by_major[major]
+        name = device.pop("name")
+        device["major"] = major
+        devices[name] = device
+    return devices
+
+def get_virtual_devices():
+    """Returns all virtual device names present in the system (like loopX, ramX and whatever else is in the /sys/devices/virtual/block directory)"""
+    virtual_devices = os.listdir("/sys/devices/virtual/block")
+    return virtual_devices
+
+
+def main():
+    #print(get_device_sizes())
+    #print(get_block_devices())
     pprint_partitions(get_partitions())
+
+if __name__ == "__main__":
+    main()
