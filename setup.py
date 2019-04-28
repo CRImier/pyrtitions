@@ -1,13 +1,34 @@
-from distutils.core import setup
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import pyrtitions
+version = pyrtitions.__version__
+
+try:
+    import fastentrypoints
+except ImportError:
+    from setuptools.command import easy_install
+    import pkg_resources
+    easy_install.main(['fastentrypoints'])
+    pkg_resources.require('fastentrypoints')
+    import fastentrypoints
+
+import sys
+try:
+    from setuptools import setup
+except ImportError:
+    from distutils.core import setup
+
+
 setup(
   name = 'pyrtitions',
-  #packages = ['pyrtitions'],
-  version = 'v1.1',
-  description = 'A library for Linux to get partition information',
+  py_modules = ['pyrtitions'],
+  version = version,
+  description = 'A small library to get partition information on Linux',
   author = 'Arsenijs Picugins',
   author_email = 'crimier@yandex.ru',
   url = 'https://github.com/CRImier/pyrtitions',
-  download_url = 'https://github.com/CRImier/pyrtitions/tarball/v1.1',
+  download_url = 'https://github.com/CRImier/pyrtitions/archive/{}.tar.gz'.format(version),
   keywords = ['linux', 'partitions'],
-  classifiers = [],
+  entry_points={"console_scripts": ["pyrtitions = pyrtitions:__main__"]}
 )
