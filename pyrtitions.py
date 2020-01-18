@@ -2,7 +2,9 @@ import os
 import shlex
 import string
 
-__version__ = '0.2.0'
+from unidecode import unidecode
+
+__version__ = '0.2.2'
 
 pprint_key_sort_order = ["size", "part_type", "uuid", "label", "mounted", "mountpoint", "mount_opts"]
 
@@ -132,9 +134,11 @@ def generate_mountpoint(part_info, base_dir="/media"):
     #1) It doesn't exist, or:
     #2) Nothing is mounted there and it's empty.
     if "label" in part_info.keys():
-        path_from_label = os.path.join(base_dir, part_info['label'])
-        if not os.path.exists(path_from_label) or (not os.path.ismount(path_from_label) and not os.listdir(path_from_label)):
-            return path_from_label
+        label = label_filter(label)
+        if label: # label might be trash
+            path_from_label = os.path.join(base_dir, label)
+            if not os.path.exists(path_from_label) or (not os.path.ismount(path_from_label) and not os.listdir(path_from_label)):
+                return path_from_label
     elif not os.path.exists(path_from_uuid) or (not os.path.ismount(path_from_uuid)):
         return path_from_uuid
     else:
@@ -146,11 +150,25 @@ def generate_mountpoint(part_info, base_dir="/media"):
 
 def label_filter(label):
     """Filters passed partition labels to alphanumeric characters"""
+    original_label = label
+    label_len = len(label)
+    # let's try and make it py2 and py3 compatible
+    try:
+        label.encode('ascii')
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        try: # python 2 compatibility
+            label = label.decode('utf-8')
+        except AttributeError:
+            pass
+        label = unidecode(label)
+        label_len = len(label)
     label_list = list(label)
     ascii_letters = string.ascii_letters+string.digits
-    for char in arr_label[:]:
+    for char in label_list[:]:
         if char not in ascii_letters:
-            arr_label.remove(char)
+            label_list.remove(char)
+    if not label_list or float(label_len)/len(label_list) >= 2:
+        return None
     return "".join(label_list)
 
 def pprint_partitions(partitions):
