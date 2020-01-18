@@ -4,6 +4,8 @@ import string
 
 __version__ = '0.2.0'
 
+pprint_key_sort_order = ["size", "part_type", "uuid", "label", "mounted", "mountpoint", "mount_opts"]
+
 def get_uuids_and_labels():
     """
       Returns a list of available partitions. Each partition is a dictionary with "uuid" and "path" keys (optionally, also "label").
@@ -155,8 +157,9 @@ def pprint_partitions(partitions):
     """Pretty-prints entries from  from ``get_partitions`` or ``get_uuids_and_labels``."""
     for part in partitions:
         print("Path: "+part["path"])
-        other_keys = [key for key in part.keys() if key!="path"]
-        for key in other_keys:
+        pprintable_keys = [key for key in pprint_key_sort_order if key in list(part.keys()) and key != "path"]
+        other_keys = [key for key in list(part.keys()) if key not in pprintable_keys and key != "path"]
+        for key in pprintable_keys+other_keys:
             value = part[key]
             print("\t{}:{}".format(key, value))
 
