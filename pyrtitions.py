@@ -51,7 +51,7 @@ def get_size_from_block_count(block_count_str, size_step=1000, sizes = ["K", "M"
         size_counter += 1
     return ("{"+format_spec+"}{}").format(block_count, sizes[size_counter])
 
-def get_device_sizes():
+def get_device_sizes_major_minor():
     """ Gets partition sizes for all the partitions/block devices available in /proc/partitions.
 
     Outputs a dictionary of path_basename:["human-readable-size", "block_count_string", "major_number_integer", "minor_number_integer"] entries."""
@@ -66,6 +66,8 @@ def get_device_sizes():
             hr_size = get_size_from_block_count(block_count_str)
             info_dict[name] = [hr_size, block_count_str, int(major), int(minor)]
     return info_dict
+
+get_device_sizes = get_device_sizes_major_minor
 
 def get_device_major_numbers():
     with open("/proc/devices", "r") as f:
@@ -218,9 +220,9 @@ def get_blockdev_major_minor(filter_virtual = True):
 
 def get_block_devices():
     """
-      Returns a dictionary of all the major devices available.
+    Returns a dictionary of all the major devices available.
 
-      Entry format is ``device_path:{"major":major_int, size:human readable size (from ``get_device_sizes``), "blocks":block count, "partitions":[{"name":path, "minor":minor_int, "blocks":block count, "size:human readable size (from ``get_device_sizes``"}, ...]}``
+    Entry format is ``device_path:{"major":major_int, size:human readable size (from ``get_device_sizes``), "blocks":block count, "partitions":[{"name":path, "minor":minor_int, "blocks":block count, "size:human readable size (from ``get_device_sizes``"}, ...]}``
     """
     #Guess I'll intentionally forget about whole-disk partitions
     devices = {}
@@ -248,7 +250,9 @@ def get_block_devices():
     return devices
 
 def get_virtual_devices():
-    """Returns all virtual device names present in the system (like loopX, ramX and whatever else is in the /sys/devices/virtual/block directory)"""
+    """
+    Returns all virtual device names present in the system (like loopX, ramX and whatever else is in the /sys/devices/virtual/block directory)
+    """
     virtual_devices = os.listdir("/sys/devices/virtual/block")
     return virtual_devices
 
