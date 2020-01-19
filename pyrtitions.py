@@ -4,7 +4,7 @@ import string
 
 from unidecode import unidecode
 
-__version__ = '0.2.2'
+__version__ = '0.2.3'
 
 pprint_key_sort_order = ["size", "part_type", "uuid", "label", "mounted", "mountpoint", "mount_opts"]
 
