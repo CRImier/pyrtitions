@@ -152,7 +152,7 @@ def generate_mountpoint(part_info, base_dir="/media"):
     #1) It doesn't exist, or:
     #2) Nothing is mounted there and it's empty.
     if "label" in part_info.keys():
-        label = label_filter(label)
+        label = label_filter(part_info["label"])
         if label: # label might be trash
             path_from_label = os.path.join(base_dir, label)
             if not os.path.exists(path_from_label) or (not os.path.ismount(path_from_label) and not os.listdir(path_from_label)):
