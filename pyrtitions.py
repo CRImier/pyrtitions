@@ -67,6 +67,24 @@ def get_device_sizes():
             info_dict[name] = [hr_size, block_count_str, int(major), int(minor)]
     return info_dict
 
+def get_device_major_numbers():
+    with open("/proc/devices", "r") as f:
+        lines = f.readlines()
+    data = {}
+    current_category = ""
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        if line.endswith(':'):
+            current_category = line.rstrip(':')
+        else:
+            if current_category not in data:
+                data[current_category] = {}
+            number, type = line.strip().split(" ", 1)
+            data[current_category][int(number)] = type
+    return data
+
 def get_mounts(mounts_file="/etc/mtab"):
     """Gets all the mounted partitions.
     Outputs a dictionary of path:["mountpoint", "type", "mount options"] entries.
